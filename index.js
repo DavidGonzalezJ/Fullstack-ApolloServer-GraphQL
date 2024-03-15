@@ -1,4 +1,5 @@
 const {MONGODB_URI, PORT} = require('./utils/config')
+const { GraphQLError } = require('graphql')
 const mongoose = require('mongoose')
 mongoose.set('strictQuery', false)
 
@@ -110,7 +111,6 @@ const typeDefs = `
     bookCount: Int!
   }
   type Query {
-    dummy: Int
     bookCount: Int!
     authorCount: Int!
     allBooks(author: String, genre: String): [Book!]!
@@ -135,66 +135,98 @@ const typeDefs = `
 `
 
 const resolvers = {
-  Author: {
-    /**/bookCount: (root) => {
-        /*const authorBooks = books.filter(b => b.author === root.name)
-        return authorBooks.length*/
-    }
-  },
   Query: {
-    dummy: () => 0,
     bookCount: async () => Book.collection.countDocuments(),
     authorCount: async () => Author.collection.countDocuments(),
     allBooks: async (root, args) => {
-        /*const bookList = !args.author ? books : books.filter(b => b.author === args.author)
-        const booksFiltered = !args.genre ? bookList : bookList.filter(b => b.genres.includes(args.genre))
+        const firstFilterList =  !args.author
+          ? await Book.find({})
+          : await Book.find({ author: args.author })
+        const secondFilterList = !args.genre
+          ? firstFilterList
+          : firstFilterList.filter(b => b.genres.includes(args.genre))
         
-        return booksFiltered*/
-        return Book.find({})
+        return secondFilterList
     },
     allAuthors: async () => Author.find({})
   },
   Mutation: {
     addBook: async (root, args) => {
         const bookAuthor = await Author.findOne({name: args.author})
-        console.log(bookAuthor)
         
         if(!bookAuthor) {
           const newAuthor = new Author({
             name: args.author,
             bookCount: 1
           })
-          const author = await newAuthor.save()
-          const newBook = new Book({ ...args, author: author })
-          const res = await newBook.save()
-          return res
+          try {
+            const author = await newAuthor.save()
+            const newBook = new Book({ ...args, author: author })
+            const res = await newBook.save()
+            return res
+          } catch (error) {
+            throw new GraphQLError('Saving failed', {
+              extensions: {
+                code: 'BAD_USER_INPUT',
+                error
+              }
+            })
+          }
         }
-        
-        const updatedAuthor = await Author.findByIdAndUpdate(bookAuthor.id,
+
+        try { 
+          const updatedAuthor = await Author.findByIdAndUpdate(bookAuthor.id,
           { bookCount: bookAuthor.bookCount + 1},
-          {new:true, runValidators: true, context: 'query'})
-        const newBook = new Book({ ...args, author: updatedAuthor })
-        const res = await newBook.save()
-        return res
+          { new:true, runValidators: true, context: 'query' })
+          const newBook = new Book({ ...args, author: updatedAuthor })
+          const res = await newBook.save()
+          return res 
+        } catch (error) {
+          throw new GraphQLError('Saving failed', {
+            extensions: {
+              code: 'BAD_USER_INPUT',
+              error
+            }
+          })
+        }
     },
     addAuthor: async (root, args) => {
         const newAuthor = new Author({
             ...args
         })
-        const res = await newAuthor.save()
-        console.log(res)
-        return res
+        try {
+          const res = await newAuthor.save()
+          console.log('Error aquí!', res)
+          return res
+        } catch (error){
+          throw new GraphQLError('Saving failed', {
+            extensions: {
+              code: 'BAD_USER_INPUT',
+              invalidArgs: args.name,
+              error
+            }
+          })
+        }
     },
-    /**/editAuthor: (root, args) => {
-        /*const author = authors.find(a => a.name === args.name)
+    editAuthor: async (root, args) => {
+        const author = await Author.findOne({ name: args.name })
         if(!author) return null
 
-        const updatedAuthor = {...author, born: args.setBornTo}
-        authors = authors.map(author => author.id === updatedAuthor.id
-            ? updatedAuthor
-            : author)
+        try { 
+          const updatedAuthor = await Author.findByIdAndUpdate(author.id,
+            { born: args.setBornTo },
+            { new:true, runValidators: true, context: 'query' })
 
-        return updatedAuthor*/
+          return updatedAuthor
+      } catch (error) {
+        throw new GraphQLError('Updating author failed', {
+          extensions: {
+            code: 'BAD_USER_INPUT',
+            invalidArgs: args.setBornTo,
+            error
+          }
+        })
+      }
     }
   }
 }
