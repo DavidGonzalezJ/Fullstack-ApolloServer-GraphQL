@@ -10,6 +10,7 @@ const { startStandaloneServer } = require('@apollo/server/standalone')
 const Book = require('./models/book')
 const Author = require('./models/author')
 const User = require('./models/user')
+const author = require('./models/author')
 
 console.log('connecting to', MONGODB_URI)
 
@@ -105,6 +106,7 @@ const typeDefs = `
     id: ID!
   }
   type Token {
+    user: User!
     value: String!
   }
   type Book {
@@ -159,8 +161,8 @@ const resolvers = {
     authorCount: async () => Author.collection.countDocuments(),
     allBooks: async (root, args) => {
         const firstFilterList =  !args.author
-          ? await Book.find({})
-          : await Book.find({ author: args.author })
+          ? await Book.find({}).populate('author')
+          : await Book.find({ author: args.author }).populate('author')
         const secondFilterList = !args.genre
           ? firstFilterList
           : firstFilterList.filter(b => b.genres.includes(args.genre))
@@ -202,7 +204,7 @@ const resolvers = {
           { new:true, runValidators: true, context: 'query' })
           const newBook = new Book({ ...args, author: updatedAuthor })
           const res = await newBook.save()
-          return res 
+          return res
         } catch (error) {
           throw new GraphQLError('Saving failed', {
             extensions: {
@@ -281,7 +283,11 @@ const resolvers = {
         username: user.username,
         id: user._id
       }
-      return { value: jwt.sign(userForToken, JWT_SECRET) }
+      const res = { 
+        user: user,
+        value: jwt.sign(userForToken, JWT_SECRET) 
+      }
+      return res
     }
   }
 }
