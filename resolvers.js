@@ -2,6 +2,9 @@ const { JWT_SECRET } = require('./utils/config')
 const { GraphQLError } = require('graphql')
 const jwt = require('jsonwebtoken')
 
+const { PubSub } = require('graphql-subscriptions')
+const pubsub = new PubSub()
+
 const Book = require('./models/book')
 const Author = require('./models/author')
 const User = require('./models/user')
@@ -38,6 +41,7 @@ const resolvers = {
               const author = await newAuthor.save()
               const newBook = new Book({ ...args, author: author })
               const res = await newBook.save()
+              pubsub.publish('BOOK_ADDED', {bookAdded: res})
               return res
             } catch (error) {
               throw new GraphQLError('Saving failed', {
@@ -55,6 +59,7 @@ const resolvers = {
             { new:true, runValidators: true, context: 'query' })
             const newBook = new Book({ ...args, author: updatedAuthor })
             const res = await newBook.save()
+            pubsub.publish('BOOK_ADDED', {bookAdded: res})
             return res
           } catch (error) {
             throw new GraphQLError('Saving failed', {
@@ -140,6 +145,11 @@ const resolvers = {
         }
         return res
       }
+    },
+    Subscription: {
+        bookAdded: {
+            subscribe: () => pubsub.asyncIterator('BOOK_ADDED')
+        }
     }
   }
 

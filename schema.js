@@ -21,6 +21,8 @@ const typeDefs = `
     id: ID!
     bookCount: Int!
   }
+
+  
   type Query {
     bookCount: Int!
     authorCount: Int!
@@ -28,6 +30,8 @@ const typeDefs = `
     allAuthors: [Author!]!
     me: User
   }
+
+
   type Mutation {
     addBook(
         title: String!
@@ -51,6 +55,11 @@ const typeDefs = `
       username: String!
       password: String!
     ): Token
+  }
+
+
+  type Subscription {
+    bookAdded: Book!
   }
 `
 
